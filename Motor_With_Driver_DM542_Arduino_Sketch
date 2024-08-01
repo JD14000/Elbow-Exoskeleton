@@ -1,0 +1,31 @@
+
+#define dirPin 8
+#define stepPin 9
+
+unsigned long prevmillis = 0;
+unsigned long currentmillis = 0;
+int delaytime = 30;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(stepPin, OUTPUT);   // Set Pin7 as input to detect signal
+  pinMode(dirPin, OUTPUT);    // Set Pin9 as PUL
+  digitalWrite(dirPin, HIGH);
+  currentmillis = millis();
+}
+
+void loop() {
+  while (currentmillis - prevmillis <= 5000) {
+    currentmillis = millis();
+    digitalWrite(stepPin, HIGH);
+    delayMicroseconds(delaytime);
+    digitalWrite(stepPin, LOW);   
+    delayMicroseconds(delaytime);
+  }
+  prevmillis = currentmillis;
+  Serial.println(delaytime);
+  delaytime = delaytime - 1;
+  if (delaytime == 0) {
+    delaytime = 50; 
+  }
+}
