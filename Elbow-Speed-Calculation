@@ -1,0 +1,112 @@
+import cv2
+import mediapipe as mp
+import numpy as np
+
+# Initialize MediaPipe Pose.
+mp_pose = mp.solutions.pose
+pose = mp_pose.Pose()
+
+# Function to calculate angle between two vectors
+def calculate_angle(a, b):
+    a = np.array(a)
+    b = np.array(b)
+    cosine_angle = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+    angle = np.arccos(cosine_angle)
+    return np.degrees(angle)
+
+# Open video file
+video_path = r'C:\Users\jayad\Desktop\New folder (3)\video6118220302297075308.mp4'  # Replace with your video file path
+cap = cv2.VideoCapture(video_path)
+
+# Get video properties
+fourcc = cv2.VideoWriter_fourcc(*'XVID')
+out = cv2.VideoWriter('output_video.avi', fourcc, int(cap.get(cv2.CAP_PROP_FPS)),
+                      (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+
+prev_angle = None
+frame_count = 0
+rate_of_change_of_angle = []
+
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Convert the BGR image to RGB.
+    image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    image.flags.writeable = False
+
+    # Process the image and detect the pose.
+    results = pose.process(image)
+
+    if results.pose_landmarks:
+        # Extract landmarks
+        landmarks = results.pose_landmarks.landmark
+
+        # Get coordinates
+        shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
+                    landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+        elbow = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x,
+                 landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
+        wrist = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x,
+                 landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
+
+        # Calculate angles
+        upper_arm_vector = np.subtract(shoulder, elbow)
+        lower_arm_vector = np.subtract(wrist, elbow)
+        angle = calculate_angle(upper_arm_vector, lower_arm_vector)
+
+        # Print the calculated angle for debugging
+        print(f"Frame {frame_count}: Angle = {angle:.2f}")
+
+        # Calculate rate of change of angle
+        if prev_angle is not None:
+            rate_of_change = abs(angle - prev_angle)
+            rate_of_change_of_angle.append(rate_of_change)
+            # Print the rate of change for debugging
+            print(f"Frame {frame_count}: Rate of Change = {rate_of_change:.2f}")
+
+        prev_angle = angle
+
+        # Convert coordinates to screen size
+        h, w, _ = frame.shape
+        shoulder = np.multiply(shoulder, [w, h]).astype(int)
+        elbow = np.multiply(elbow, [w, h]).astype(int)
+        wrist = np.multiply(wrist, [w, h]).astype(int)
+
+        # Draw axes
+        cv2.line(frame, tuple(shoulder), tuple(elbow), (0, 255, 0), 3)
+        cv2.line(frame, tuple(elbow), tuple(wrist), (0, 255, 0), 3)
+
+        # Display angle
+        cv2.putText(frame, str(int(angle)),
+                    tuple(elbow),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+
+    out.write(frame)
+    frame_count += 1
+
+# Release resources
+cap.release()
+out.release()
+pose.close()
+
+# Calculate max, min, and average rate of change
+if rate_of_change_of_angle:
+    max_rpm = max(rate_of_change_of_angle)
+    min_rpm = min(rate_of_change_of_angle)
+    avg_rpm = sum(rate_of_change_of_angle) / len(rate_of_change_of_angle)
+else:
+    max_rpm = min_rpm = avg_rpm = 0
+
+# Print rate of change of angle
+print("Rate of Change of Angle between Upper and Lower Arm:")
+print(rate_of_change_of_angle)
+
+# Save RPM data to a text file
+with open('elbow_joint_rpm.txt', 'w') as f:
+    f.write(f"Max RPM: {max_rpm:.2f}\n")
+    f.write(f"Min RPM: {min_rpm:.2f}\n")
+    f.write(f"Average RPM: {avg_rpm:.2f}\n")
+
+print("RPM data saved to elbow_joint_rpm.txt")
